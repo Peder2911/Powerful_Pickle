@@ -1,0 +1,10 @@
+{
+ "name":"powerful pickle",
+ "interpreter":"python3",
+ "executable":"pp.py",
+ "args":"",
+ "options":
+ {
+	 "Path to pickle":"freetext"
+ }
+}
