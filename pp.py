@@ -1,25 +1,26 @@
+"""
+Uses serialized sklearn models to make predictions about text.
+"""
+
 import time
+
 import sys
+import os
+
+import re
+
+mypath = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(mypath)
+
 import csv
 import json
-
 import colorama
 
 from sklearn.externals import joblib
+from lib.analyzers import *
 
 import redis
-
 from dfitools import RedisCsvChannel as Rcc
-
-# * POWERFUL PICKLE * ##############
-# Peder G. Landsverk - 2018 ########
-# For use with DFI #################
-
-"""
-Loads a pickled pipeline
-and uses it to predict outcome
-using text in dat[tgtCol]
-"""
 
 colorama.init(autoreset = True)
 
@@ -43,29 +44,35 @@ tgtIndex = rcc.header.index(tgtCol)
 
 # Load the pipeline ################
 
-pl = joblib.load(plFile)
+try:
+    pl = joblib.load(plFile)
+except AttributeError as e:
+    print(e)
+    print(colorama.Fore.RED + 'Loading model failed;')
+    print(colorama.Fore.RED + 'dependencies not met?')
+    a,b = re.findall('\'[^\']+\'',string = str(e))
+    print(colorama.Fore.RED + b + ' not found in ' + a)
+    sys.exit(1)
 
 # Classification ###################
 
 m1 = time.time()
 
+rcc.appendCol('prediction')
+
 while True: 
     ch = rcc.getChunk()
-    if ch == []:
-        break
-    else:
+    if ch:
         predictions = pl.predict([row[tgtIndex] for row in ch])
         for i,p in enumerate(predictions):
             ch[i].append(p)
         rcc.writeChunk(ch) 
 
+    else:
+        break
 
+rcc.commit(label = True)
 m2 = time.time()
+
 print((colorama.Fore.BLUE + 'Time elapsed: ' + str(m2 - m1) + ' seconds'))
-
-rcc.header.append('prediction')
-
-# Data output ######################
-
-rcc.commit()
 
