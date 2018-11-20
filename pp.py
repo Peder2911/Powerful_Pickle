@@ -20,7 +20,8 @@ from sklearn.externals import joblib
 from lib.analyzers import *
 
 import redis
-from dfitools import RedisCsvChannel as Rcc
+#from dfitools import RedisCsvChannel as Rcc
+from dfitools.RedisDf import RedisDf
 
 colorama.init(autoreset = True)
 
@@ -35,12 +36,11 @@ tgtCol = 'body'
 
 # Redis Stuff ######################
 
-r = redis.Redis(host = rconf['hostname'],
-                port = rconf['port'],
-                db = rconf['db'])
-
-rcc = Rcc.RedisCsvChannel(r,rconf['listkey'],chunksize)
-tgtIndex = rcc.header.index(tgtCol)
+rdf = RedisDf(host = rconf['hostname'],
+              port = rconf['port'],
+              db = rconf['db'],
+              chunksize = config['chunksize'],
+              key = rconf['listkey'])
 
 # Load the pipeline ################
 
@@ -58,20 +58,16 @@ except AttributeError as e:
 
 m1 = time.time()
 
-rcc.appendCol('prediction')
+ch = rdf.getChunk()
+while ch:
+    predictions = pl.predict([row[tgtCol] for row in ch])
+    for i,p in enumerate(predictions):
+        ch[i].update({'prediction':int(p)})
+    rdf.writeChunk(ch)
+    ch = rdf.getChunk()
 
-while True: 
-    ch = rcc.getChunk()
-    if ch:
-        predictions = pl.predict([row[tgtIndex] for row in ch])
-        for i,p in enumerate(predictions):
-            ch[i].append(p)
-        rcc.writeChunk(ch) 
+rdf.commit()
 
-    else:
-        break
-
-rcc.commit(label = True)
 m2 = time.time()
 
 print((colorama.Fore.BLUE + 'Time elapsed: ' + str(m2 - m1) + ' seconds'))
